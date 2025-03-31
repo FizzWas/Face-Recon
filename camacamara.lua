@@ -36,10 +36,20 @@ local playerInfoPrinted = false
 local scannedNicknames = {}
 
 local config = inicfg.load(nil, "facerecon.ini")
+
 if not config then
-    config = inicfg.load({Notion = {SECRET = "Solicita Secret"}, Key = {KEY_1 = 66}}, "facerecon.ini")
+    config = inicfg.load({
+        Notion = {
+            SECRET = "Solicitar Secret"
+        },
+        Key = {
+            Key_1 = 66
+        }
+    }, "facerecon.ini")
     inicfg.save(config, "facerecon.ini")
 end
+
+local vkey_1 = config.Key.KEY_1
 
 local function xor(a, b)
     return string.char(bit.bxor(string.byte(a), string.byte(b)))
@@ -302,8 +312,8 @@ function main()
         wait(0)
         if not sampIsChatInputActive() and not sampIsDialogActive() then
             local weapon = getCurrentCharWeapon(PLAYER_PED)
-            if (weapon == 43 or weapon == 34) and isKeyDown(config.Key.KEY_1) then
-                if isKeyJustPressed(VK_KEY) then
+            if (weapon == 43 or weapon == 34) and isKeyDown(0x02) then
+                if isKeyJustPressed(vkey_1) then
                     findCenterPlayer()
                 end
                 if not isRendering then
