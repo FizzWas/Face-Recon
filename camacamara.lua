@@ -49,7 +49,7 @@ if not config then
     inicfg.save(config, "facerecon.ini")
 end
 
-local vkey_1 = config.Key.KEY_1
+local vkey_1 = config.Key.Key_1
 
 local function xor(a, b)
     return string.char(bit.bxor(string.byte(a), string.byte(b)))
@@ -160,7 +160,11 @@ function findCenterPlayer()
             local screenX, screenY = convert3DCoordsToScreen(x, y, z)
             if screenX and screenY then
                 local px, py, pz = getCharCoordinates(PLAYER_PED)
-                if not isCharInAnyCar(player) and isLineOfSightClear(px, py, pz, x, y, z, true, true, false, false, false) then
+                
+                local isOnBike = isCharOnAnyBike(player)
+                local isInVehicle = isCharInAnyCar(player) and not isOnBike
+                
+                if (not isInVehicle or isOnBike) and isLineOfSightClear(px, py, pz, x, y, z, true, true, false, false, false) then
                     local distToCenter = math.sqrt((centerX - screenX)^2 + (centerY - screenY)^2)
                     if distToCenter < minDistance then
                         minDistance = distToCenter
@@ -171,12 +175,13 @@ function findCenterPlayer()
             end
         end
     end
+
     if closestPlayer and minDistance <= radiusThreshold then
         local nickname = sampGetPlayerNickname(closestPlayer):lower()
         local scanTime = 3.0
         if scannedNicknames[nickname] then
             scanTime = 1.0
-        end
+        end 
         printStringNow("~g~Escaneo en proceso...", scanTime * 1000)
         originalTargetTime = os.clock() + scanTime
         drawTime = originalTargetTime + 2.0
@@ -217,7 +222,7 @@ function findCenterPlayer()
             scanningActive = false
         end)        
     else
-        printStringNow("~r~No se encuentra jugador.", 1500)
+        printStringNow("~r~Ninguna persona detectada.", 1500)
         drawTime = 0
         closestPlayerId = nil
         playerScreenX, playerScreenY = nil, nil
@@ -307,7 +312,7 @@ function main()
     else
         sampAddChatMessage("[F.R]{FFFFFF} Equipo de reconocimiento facial functional. Utiliza tu {3399FF}cámara{FFFFFF} o {3399FF}francotirador{FFFFFF} para activarlo.", 0x3399FF)
     end
-    sampRegisterChatCommand("factualizar", fetchNotionData)
+
     while true do
         wait(0)
         if not sampIsChatInputActive() and not sampIsDialogActive() then
