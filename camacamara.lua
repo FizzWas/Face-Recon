@@ -1,11 +1,21 @@
 require "lib.moonloader"
-local sampev = require "lib.samp.events"
-local https = require("ssl.https")
-local ltn12 = require("ltn12")
-local json = require("cjson")
-local inicfg = require("inicfg")
 
-local VK_KEY = 66
+local function safeRequire(moduleName)
+    local success, module = pcall(require, moduleName)
+    if not success then
+        print("Error: Librería faltante - " .. moduleName)
+        thisScript():unload()
+        return nil
+    end
+    return module
+end
+
+local sampev = safeRequire("lib.samp.events")
+local https = safeRequire("ssl.https")
+local ltn12 = safeRequire("ltn12")
+local json = safeRequire("cjson")
+local inicfg = safeRequire("inicfg")
+
 local streamedPlayers = {}
 local radiusThreshold = 300
 local drawTime = 0
@@ -27,7 +37,7 @@ local scannedNicknames = {}
 
 local config = inicfg.load(nil, "facerecon.ini")
 if not config then
-    config = inicfg.load({Notion = {SECRET = "Solicita Secret"}}, "facerecon.ini")
+    config = inicfg.load({Notion = {SECRET = "Solicita Secret"}, Key = {KEY_1 = 66}}, "facerecon.ini")
     inicfg.save(config, "facerecon.ini")
 end
 
@@ -169,7 +179,6 @@ function findCenterPlayer()
             while os.clock() < targetTime do
                 wait(0)
                 if not isKeyDown(0x02) then
-                    print("DEBUG: Key released before scan complete.")
                     printStringNow("~r~Escaneo interrumpido.", 1500)
                     drawTime = 0
                     closestPlayerId = nil
@@ -183,7 +192,6 @@ function findCenterPlayer()
                     local px, py, pz = getCharCoordinates(PLAYER_PED)
                     local x, y, z = getCharCoordinates(player)
                     if not isLineOfSightClear(px, py, pz, x, y, z, true, true, false, false, false) or not isCharOnScreen(player) then
-                        print("DEBUG: Player offscreen during scan.")
                         printStringNow("~r~Escaneo interrumpido.", 1500)
                         drawTime = 0
                         closestPlayerId = nil
@@ -258,7 +266,6 @@ function onRender()
         playerInfoPrinted = true
     end
     if not scanningActive and os.clock() >= drawTime then
-        print("DEBUG: drawTime expired after scan. Stopping rendering.")
         isRendering = false
         closestPlayerId = nil
         drawTime = 0
@@ -295,7 +302,7 @@ function main()
         wait(0)
         if not sampIsChatInputActive() and not sampIsDialogActive() then
             local weapon = getCurrentCharWeapon(PLAYER_PED)
-            if (weapon == 43 or weapon == 34) and isKeyDown(0x02) then
+            if (weapon == 43 or weapon == 34) and isKeyDown(config.Key.KEY_1) then
                 if isKeyJustPressed(VK_KEY) then
                     findCenterPlayer()
                 end
