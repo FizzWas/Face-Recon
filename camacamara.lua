@@ -1,5 +1,6 @@
 require "lib.moonloader"
 
+-- Función para cargar módulos de forma segura
 local function safeRequire(moduleName)
     local success, module = pcall(require, moduleName)
     if not success then
@@ -10,12 +11,14 @@ local function safeRequire(moduleName)
     return module
 end
 
+-- Cargar librerías necesarias
 local sampev = safeRequire("lib.samp.events")
 local https = safeRequire("ssl.https")
 local ltn12 = safeRequire("ltn12")
 local json = safeRequire("cjson")
 local inicfg = safeRequire("inicfg")
 
+-- Variables globales
 local streamedPlayers = {}
 local radiusThreshold = 300
 local drawTime = 0
@@ -35,8 +38,10 @@ local successfulScan = false
 local playerInfoPrinted = false
 local scannedNicknames = {}
 
+-- Cargar configuración de archivo INI
 local config = inicfg.load(nil, "facerecon.ini")
 
+-- Si no existe la configuración, crear una predeterminada
 if not config then
     config = inicfg.load({
         Notion = {
@@ -51,14 +56,17 @@ end
 
 local vkey_1 = config.Key.Key_1
 
+-- Función XOR para desencriptar
 local function xor(a, b)
     return string.char(bit.bxor(string.byte(a), string.byte(b)))
 end
 
+-- Función para convertir un valor hexadecimal en texto
 local function from_hex(hex)
     return (hex:gsub('..', function(cc) return string.char(tonumber(cc, 16)) end))
 end
 
+-- Función para desencriptar datos
 local function decrypt(encryptedHex, key)
     local encrypted = from_hex(encryptedHex)
     local decrypted = {}
@@ -74,12 +82,15 @@ local encryptedSecret = config.Notion.SECRET
 local password = "Khub86XL357d1qI83Ss3rv48P"
 notionToken = decrypt(encryptedSecret, password)
 
+-- Función para obtener los datos de Notion
 function fetchNotionData()
     local headers = {
         ["Authorization"] = "Bearer " .. notionToken,
         ["Content-Type"] = "application/json",
         ["Notion-Version"] = "2022-06-28"
     }
+
+    -- Función interna para consultar bases de datos de Notion
     local function queryDatabase(databaseId)
         local url = "https://api.notion.com/v1/databases/" .. databaseId .. "/query"
         local response = {}
@@ -92,13 +103,19 @@ function fetchNotionData()
         })
         return code == 200 and json.decode(table.concat(response)) or nil
     end
+
+    -- Consultar varias bases de datos de Notion
     local peopleData = queryDatabase(dbPeople)
     local rankData = queryDatabase(dbRank)
     local orgData = queryDatabase(dbOrg)
     local memData = queryDatabase(dbMem)
+
+    -- Verificar si se obtuvieron los datos
     if not peopleData or not rankData or not orgData or not memData then return end
     local peopleMap, assignedRanks, orgMap = {}, {}, {}
     memSAEF = {}
+
+    -- Asignar nombres de organizaciones
     for _, org in ipairs(orgData.results) do
         local orgId = org.id
         local nombre = org.properties["Nombre"] and org.properties["Nombre"].title[1] and org.properties["Nombre"].title[1].text.content or ""
@@ -106,6 +123,8 @@ function fetchNotionData()
             orgMap[orgId] = nombre
         end
     end
+
+    -- Asignar cuentas (Nombre_Apellido) y organizaciones a cada persona
     for _, person in ipairs(peopleData.results) do
         local cuenta = person.properties["Cuenta"] and person.properties["Cuenta"].rich_text[1] and person.properties["Cuenta"].rich_text[1].text.content or ""
         local organizacionId = person.properties["Organizacion"] and person.properties["Organizacion"].relation[1] and person.properties["Organizacion"].relation[1].id or ""
@@ -115,6 +134,8 @@ function fetchNotionData()
             assignedRanks[cuenta] = { Rango = "N/A", Organizacion = organizacion }
         end
     end
+
+    -- Asignar rangos a las cuentas
     for _, rank in ipairs(rankData.results) do
         local rango = rank.properties["Rango"] and rank.properties["Rango"].title[1] and rank.properties["Rango"].title[1].text.content or ""
         local individuos = rank.properties["Individuos"] and rank.properties["Individuos"].relation or {}
@@ -125,12 +146,16 @@ function fetchNotionData()
             end
         end
     end
+
+    -- Asignar cuentas verificadas
     for _, entry in ipairs(memData.results) do
         local cuenta = entry.properties["Cuenta"] and entry.properties["Cuenta"].formula and entry.properties["Cuenta"].formula.string or ""
         if cuenta ~= "" then
             table.insert(memSAEF, cuenta)
         end
     end
+
+    -- Crear la tabla final con cuentas y datos asignados
     cuentasTable = {}
     for cuenta, data in pairs(assignedRanks) do
         table.insert(cuentasTable, { Cuenta = cuenta, Rango = data.Rango, Organizacion = data.Organizacion })
@@ -139,16 +164,19 @@ end
 
 fetchNotionData()
 
+-- Evento cuando se streamea alguien
 function sampev.onPlayerStreamIn(playerId)
     streamedPlayers[playerId] = true
 end
 
+-- Evento cuando el jugador se desestreamea
 function sampev.onPlayerStreamOut(playerId)
     streamedPlayers[playerId] = nil
 end
 
 scanningActive = false
 
+-- Función para encontrar el jugador más cercano al centro de la pantalla
 function findCenterPlayer()
     local sx, sy = getScreenResolution()
     local centerX, centerY = sx / 2, sy / 2
@@ -164,6 +192,7 @@ function findCenterPlayer()
                 local isOnBike = isCharOnAnyBike(player)
                 local isInVehicle = isCharInAnyCar(player) and not isOnBike
                 
+                -- Verificar si el jugador está en línea de visión y no está obstruído
                 if (not isInVehicle or isOnBike) and isLineOfSightClear(px, py, pz, x, y, z, true, true, false, false, false) then
                     local distToCenter = math.sqrt((centerX - screenX)^2 + (centerY - screenY)^2)
                     if distToCenter < minDistance then
@@ -176,6 +205,7 @@ function findCenterPlayer()
         end
     end
 
+    -- Si se encuentra un jugador cercano, iniciar escaneo
     if closestPlayer and minDistance <= radiusThreshold then
         local nickname = sampGetPlayerNickname(closestPlayer):lower()
         local scanTime = 3.0
@@ -229,6 +259,7 @@ function findCenterPlayer()
     end
 end
 
+-- Acá comienzo el loop para renderizar
 function startRenderingLoop()
     lua_thread.create(function()
         while isRendering do
@@ -238,6 +269,7 @@ function startRenderingLoop()
     end)
 end
 
+-- Función para renderizar la caja y la info
 function onRender()
     if closestPlayerId then
         local result, player = sampGetCharHandleBySampPlayerId(closestPlayerId)
@@ -287,6 +319,7 @@ function onRender()
     end
 end
 
+-- Función para verificar si la persona que usa el script es miembro de saef y está en sd1
 function isPlayerVerified()
     local vIp = "144.217.123.12"
     local result, pId = sampGetPlayerIdByCharHandle(PLAYER_PED)
@@ -303,6 +336,7 @@ function isPlayerVerified()
     end
 end
 
+-- Función principal
 function main()
     while not isSampAvailable() do wait(100) end
     while not sampIsLocalPlayerSpawned() do wait(10) end
@@ -310,7 +344,7 @@ function main()
         sampAddChatMessage("[F.R]{FFFFFF} Intentaste acceder a sistemas privados sin el permiso de acceso necesario, {FFFF00}la policía será notificada{FFFFFF}.", 0x3399FF)
         thisScript():unload()
     else
-        sampAddChatMessage("[F.R]{FFFFFF} Equipo de reconocimiento facial functional. Utiliza tu {3399FF}cámara{FFFFFF} o {3399FF}francotirador{FFFFFF} para activarlo.", 0x3399FF)
+        sampAddChatMessage("[F.R]{FFFFFF} Equipo de reconocimiento facial funcional. Utiliza tu {3399FF}cámara{FFFFFF} o {3399FF}francotirador{FFFFFF} para activarlo.", 0x3399FF)
     end
 
     while true do
